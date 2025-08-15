@@ -723,6 +723,7 @@
         let deferredPrompt;
         let currentUser = null;
         let isAuthenticated = false;
+        let processingToken = false;
 
         // API Configuration
         const API_BASE = window.location.hostname === 'localhost' 
@@ -749,10 +750,27 @@
                 return;
             }
 
+            // Check for invite token in URL first
+            const urlParams = new URLSearchParams(window.location.hash.substring(1));
+            const inviteToken = urlParams.get('invite_token');
+            const recoveryToken = urlParams.get('recovery_token');
+            const confirmationToken = urlParams.get('confirmation_token');
+            
+            console.log('URL tokens:', { inviteToken, recoveryToken, confirmationToken });
+
             // Initialize Netlify Identity with explicit configuration
             netlifyIdentity.init({
                 APIUrl: window.location.origin + '/.netlify/identity'
             });
+
+            // If there's an invite/recovery/confirmation token, don't show login prompt yet
+            if (inviteToken || recoveryToken || confirmationToken) {
+                console.log('Processing token, hiding login prompt');
+                processingToken = true;
+                hideLoginPrompt();
+                // Let Netlify Identity handle the token
+                return;
+            }
 
             // Check if user is already logged in
             currentUser = netlifyIdentity.currentUser();
@@ -804,6 +822,31 @@
 
             netlifyIdentity.on('error', err => {
                 console.error('Netlify Identity error:', err);
+            });
+
+            // Handle invite acceptance
+            netlifyIdentity.on('open', () => {
+                console.log('Identity modal opened');
+                hideLoginPrompt();
+            });
+
+            netlifyIdentity.on('close', () => {
+                console.log('Identity modal closed');
+                // Check if user is now logged in after modal closes
+                setTimeout(() => {
+                    currentUser = netlifyIdentity.currentUser();
+                    if (currentUser) {
+                        console.log('User logged in after modal close');
+                        isAuthenticated = true;
+                        updateAuthUI();
+                        hideLoginPrompt();
+                        initializeApp();
+                    } else if (!processingToken) {
+                        // Only show login prompt if not processing a token
+                        showLoginPrompt();
+                    }
+                    processingToken = false;
+                }, 100);
             });
         }
 
