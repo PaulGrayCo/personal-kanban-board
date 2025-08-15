@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>kanban board - for humans who make stuff</title>
+    
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#c55043">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Kanban Board">
+    
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E📋%3C/text%3E%3C/svg%3E">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <style>
+        :root {
+            --color-primary: #c55043;
+            --color-electric: #6c5ce7;
+            --color-warm: #fdcb6e;
+            --color-cool: #74b9ff;
+            --color-success: #00b894;
+            --color-bg-primary: #fafbfc;
+            --color-bg-secondary: #f1f3f4;
+            --color-text-primary: #2d3748;
+            --color-text-secondary: #4a5568;
+            --color-text-muted: #718096;
+            --glass-bg: rgba(255, 255, 255, 0.25);
+            --glass-border: rgba(255, 255, 255, 0.18);
+            --space-xs: 0.25rem;
+            --space-sm: 0.5rem;
+            --space-md: 1rem;
+            --space-lg: 1.5rem;
+            --space-xl: 2rem;
+            --space-2xl: 3rem;
+            --space-3xl: 4rem;
+            --radius-sm: 0.375rem;
+            --radius-md: 0.5rem;
+            --radius-lg: 0.75rem;
+            --radius-xl: 1rem;
+            --transition-fast: 0.15s ease-out;
+            --transition-medium: 0.3s ease-out;
+            --transition-slow: 0.5s ease-out;
+            --font-family-primary: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            --font-family-secondary: Georgia, 'Times New Roman', serif;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-family-primary);
+            background: var(--color-bg-primary);
+            min-height: 100vh;
+            padding: var(--space-lg);
+            color: var(--color-text-primary);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: var(--space-3xl);
+            padding-bottom: var(--space-xl);
+        }
+
+        .header h1 {
+            font-size: clamp(2rem, 4vw, 2.5rem);
+            font-weight: 600;
+            margin-bottom: var(--space-sm);
+            color: var(--color-text-primary);
+        }
+
+        .highlight {
+            background: linear-gradient(135deg, var(--color-primary), var(--color-electric));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            color: var(--color-text-secondary);
+            font-family: var(--font-family-secondary);
+            margin-bottom: var(--space-xl);
+            font-style: italic;
+        }
+
+        .add-card-btn {
+            background: linear-gradient(135deg, var(--color-primary), var(--color-electric));
+            color: white;
+            border: none;
+            padding: var(--space-md) var(--space-xl);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all var(--transition-medium);
+            box-shadow: 0 4px 15px rgba(197, 80, 67, 0.3);
+            text-transform: lowercase;
+        }
+
+        .add-card-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(197, 80, 67, 0.4);
+        }
+
+        .status-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: var(--space-xs) var(--space-sm);
+            border-radius: var(--radius-sm);
+            font-size: 0.8rem;
+            font-weight: 500;
+            z-index: 1000;
+        }
+
+        .status-online {
+            background: var(--color-success);
+            color: white;
+        }
+
+        .status-offline {
+            background: var(--color-warm);
+            color: var(--color-text-primary);
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--space-xl);
+        }
+
+        .column {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border-radius: var(--radius-lg);
+            padding: var(--space-xl);
+            border: 1px solid var(--glass-border);
+            min-height: 500px;
+            transition: all var(--transition-medium);
+        }
+
+        .column:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .column-header {
+            text-align: center;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--color-text-primary);
+            margin-bottom: var(--space-xl);
+            padding-bottom: var(--space-md);
+            border-bottom: 2px solid var(--glass-border);
+            text-transform: lowercase;
+            letter-spacing: 0.5px;
+            position: relative;
+        }
+
+        .unsorted .column-header::after { content: '🤷‍♂️'; position: absolute; right: 0; opacity: 0.6; }
+        .todo .column-header::after { content: '📝'; position: absolute; right: 0; opacity: 0.6; }
+        .progress .column-header::after { content: '🔥'; position: absolute; right: 0; opacity: 0.6; }
+        .done .column-header::after { content: '✨'; position: absolute; right: 0; opacity: 0.6; }
+
+        .cards-container {
+            min-height: 400px;
+            padding: var(--space-sm) 0;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(16px);
+            border-radius: var(--radius-md);
+            padding: var(--space-lg);
+            margin-bottom: var(--space-md);
+            border: 1px solid var(--glass-border);
+            cursor: grab;
+            transition: all var(--transition-medium);
+            border-left: 4px solid var(--color-text-muted);
+        }
+
+        .card:hover {
+            transform: translateY(-3px) rotate(1deg);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            border-color: var(--color-primary);
+        }
+
+        .card.dragging {
+            opacity: 0.8;
+            transform: rotate(5deg);
+        }
+
+        .card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--color-text-primary);
+            margin-bottom: var(--space-sm);
+            line-height: 1.4;
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .card-description {
+            font-size: 0.9rem;
+            color: var(--color-text-secondary);
+            margin-bottom: var(--space-md);
+            line-height: 1.5;
+            font-family: var(--font-family-secondary);
+        }
+
+        .card-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: var(--space-sm);
+        }
+
+        .card-due-wrapper {
+            flex: 1;
+        }
+
+        .card-due-date {
+            font-size: 0.8rem;
+            color: var(--color-text-secondary);
+            background: var(--color-bg-secondary);
+            padding: var(--space-xs) var(--space-sm);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--glass-border);
+            display: inline-block;
+        }
+
+        .card-due-date.overdue {
+            background: #fee;
+            color: var(--color-primary);
+            border-color: var(--color-primary);
+            animation: pulse-urgent 2s infinite;
+        }
+
+        @keyframes pulse-urgent {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .card-due-time {
+            font-size: 0.75rem;
+            color: var(--color-text-muted);
+            margin-top: var(--space-xs);
+            font-weight: 500;
+        }
+
+        .card-actions {
+            display: flex;
+            gap: var(--space-xs);
+        }
+
+        .card-btn {
+            border: none;
+            background: var(--glass-bg);
+            cursor: pointer;
+            padding: var(--space-xs);
+            border-radius: var(--radius-sm);
+            transition: all var(--transition-fast);
+            border: 1px solid transparent;
+        }
+
+        .card-btn:hover {
+            background: rgba(255, 255, 255, 0.8);
+            border-color: var(--glass-border);
+            transform: scale(1.1);
+        }
+
+        .label {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: var(--space-xs);
+        }
+
+        .label-red { background: var(--color-primary); }
+        .label-yellow { background: var(--color-warm); }
+        .label-green { background: var(--color-success); }
+        .label-blue { background: var(--color-cool); }
+        .label-purple { background: var(--color-electric); }
+        .label-gray { background: var(--color-text-muted); }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(45, 55, 72, 0.6);
+            z-index: 1000;
+            backdrop-filter: blur(8px);
+        }
+
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            padding: var(--space-2xl);
+            border-radius: var(--radius-lg);
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .modal h2 {
+            margin-bottom: var(--space-xl);
+            color: var(--color-text-primary);
+            font-weight: 600;
+            text-transform: lowercase;
+        }
+
+        .form-group {
+            margin-bottom: var(--space-lg);
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: var(--space-xs);
+            font-weight: 500;
+            color: var(--color-text-primary);
+            font-size: 0.9rem;
+            text-transform: lowercase;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: var(--space-md);
+            border: 2px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            font-size: 0.9rem;
+            font-family: var(--font-family-primary);
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            color: var(--color-text-primary);
+            transition: all var(--transition-medium);
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--color-primary);
+            transform: scale(1.02);
+        }
+
+        .form-group textarea {
+            height: 80px;
+            resize: vertical;
+            font-family: var(--font-family-secondary);
+        }
+
+        .label-selector {
+            display: flex;
+            gap: var(--space-md);
+            flex-wrap: wrap;
+        }
+
+        .label-option {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 3px solid transparent;
+            transition: all var(--transition-fast);
+        }
+
+        .label-option:hover {
+            transform: scale(1.1);
+        }
+
+        .label-option.selected {
+            border-color: var(--color-text-primary);
+            transform: scale(1.15);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: var(--space-md);
+            justify-content: flex-end;
+            margin-top: var(--space-xl);
+        }
+
+        .btn {
+            padding: var(--space-md) var(--space-lg);
+            border: none;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all var(--transition-medium);
+            text-transform: lowercase;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--color-primary), var(--color-electric));
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(197, 80, 67, 0.4);
+        }
+
+        .btn-secondary {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            color: var(--color-text-primary);
+            border: 1px solid var(--glass-border);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.8);
+            transform: translateY(-1px);
+        }
+
+        .sortable-ghost { opacity: 0.4; }
+        .sortable-chosen { transform: rotate(3deg); }
+
+        .disclaimer {
+            font-size: 0.8rem;
+            color: var(--color-text-muted);
+            margin-top: var(--space-lg);
+            text-align: center;
+            font-style: italic;
+            font-family: var(--font-family-secondary);
+        }
+
+        .install-prompt {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--color-primary);
+            color: white;
+            padding: var(--space-md) var(--space-lg);
+            border-radius: var(--radius-md);
+            box-shadow: 0 4px 15px rgba(197, 80, 67, 0.3);
+            z-index: 1000;
+            animation: slide-up 0.3s ease-out;
+        }
+
+        @keyframes slide-up {
+            from { transform: translate(-50%, 100%); opacity: 0; }
+            to { transform: translate(-50%, 0); opacity: 1; }
+        }
+
+        .install-prompt button {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: var(--space-xs) var(--space-sm);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            margin-left: var(--space-sm);
+            font-size: 0.8rem;
+        }
+
+        @media (max-width: 1024px) {
+            .board {
+                grid-template-columns: repeat(2, 1fr);
+                gap: var(--space-lg);
+            }
+        }
+
+        @media (max-width: 768px) {
+            body { padding: var(--space-md); }
+            .board { grid-template-columns: 1fr; gap: var(--space-md); }
+            .header h1 { font-size: 1.8rem; }
+            .column { padding: var(--space-lg); }
+            .modal-content { padding: var(--space-xl); width: 95%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="status-indicator" id="statusIndicator">
+        <span id="statusText">connecting...</span>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>personal <span class="highlight">kanban board</span></h1>
+            <div class="subtitle">for humans who make stuff (and need to remember what they're doing)</div>
+            <button class="add-card-btn" onclick="openModal()">+ add new thing</button>
+            <p class="disclaimer">* because your brain is already full of better things</p>
+        </div>
+
+        <div class="board">
+            <div class="column unsorted">
+                <div class="column-header">brain dump</div>
+                <div class="cards-container" id="unsorted-cards"></div>
+            </div>
+            
+            <div class="column todo">
+                <div class="column-header">ready to tackle</div>
+                <div class="cards-container" id="todo-cards"></div>
+            </div>
+            
+            <div class="column progress">
+                <div class="column-header">currently doing</div>
+                <div class="cards-container" id="progress-cards"></div>
+            </div>
+            
+            <div class="column done">
+                <div class="column-header">boom. done.</div>
+                <div class="cards-container" id="done-cards"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="install-prompt" id="installPrompt">
+        want to install this as an app?
+        <button onclick="installApp()">yes please</button>
+        <button onclick="dismissInstall()">not now</button>
+    </div>
+
+    <!-- Modal for adding/editing cards -->
+    <div id="cardModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle">add something new</h2>
+            <form id="cardForm">
+                <div class="form-group">
+                    <label for="cardTitle">what's the thing?</label>
+                    <input type="text" id="cardTitle" placeholder="finish that project, call mom, save the world..." required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="cardDescription">any details?</label>
+                    <textarea id="cardDescription" placeholder="optional. but sometimes helpful for future you."></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="cardDueDate">when's it due?</label>
+                    <input type="date" id="cardDueDate">
+                </div>
+                
+                <div class="form-group">
+                    <label for="cardDueTime">what time?</label>
+                    <input type="time" id="cardDueTime">
+                </div>
+                
+                <div class="form-group">
+                    <label>pick a vibe</label>
+                    <div class="label-selector">
+                        <div class="label-option label-gray" data-color="gray" title="just normal stuff"></div>
+                        <div class="label-option label-red" data-color="red" title="urgent! fire! help!"></div>
+                        <div class="label-option label-yellow" data-color="yellow" title="kinda important"></div>
+                        <div class="label-option label-green" data-color="green" title="chill vibes"></div>
+                        <div class="label-option label-blue" data-color="blue" title="work stuff"></div>
+                        <div class="label-option label-purple" data-color="purple" title="creative magic"></div>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">never mind</button>
+                    <button type="submit" class="btn btn-primary">save it</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let cards = [];
+        let editingCardId = null;
+        let isOnline = navigator.onLine;
+        let deferredPrompt;
+
+        // API Configuration
+        const API_BASE = window.location.hostname === 'localhost' 
+            ? 'http://localhost:8888/.netlify/functions'
+            : '/.netlify/functions';
+
+        // Initialize the board
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeApp();
+            setupDragAndDrop();
+            setupLabelSelector();
+            setupPWA();
+            updateOnlineStatus();
+        });
+
+        async function initializeApp() {
+            try {
+                await loadCards();
+                renderCards();
+                updateStatus('online', 'online ✨');
+            } catch (error) {
+                console.error('Failed to load cards:', error);
+                // Try to load from localStorage as fallback
+                const localCards = localStorage.getItem('kanbanCards');
+                if (localCards) {
+                    cards = JSON.parse(localCards);
+                    renderCards();
+                    updateStatus('offline', 'offline mode');
+                } else {
+                    updateStatus('offline', 'failed to connect');
+                }
+            }
+        }
+
+        function setupPWA() {
+            // Register service worker
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => console.log('SW registered'))
+                    .catch(error => console.log('SW registration failed'));
+            }
+
+            // Handle install prompt
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredPrompt = e;
+                showInstallPrompt();
+            });
+
+            // Handle online/offline
+            window.addEventListener('online', () => {
+                isOnline = true;
+                updateOnlineStatus();
+                syncLocalChanges();
+            });
+
+            window.addEventListener('offline', () => {
+                isOnline = false;
+                updateOnlineStatus();
+            });
+        }
+
+        function showInstallPrompt() {
+            document.getElementById('installPrompt').style.display = 'block';
+        }
+
+        function installApp() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    deferredPrompt = null;
+                    dismissInstall();
+                });
+            }
+        }
+
+        function dismissInstall() {
+            document.getElementById('installPrompt').style.display = 'none';
+        }
+
+        function updateOnlineStatus() {
+            if (isOnline) {
+                updateStatus('online', 'online ✨');
+            } else {
+                updateStatus('offline', 'offline mode');
+            }
+        }
+
+        function updateStatus(type, text) {
+            const indicator = document.getElementById('statusIndicator');
+            const statusText = document.getElementById('statusText');
+            indicator.className = `status-indicator status-${type}`;
+            statusText.textContent = text;
+        }
+
+        async function apiRequest(endpoint, options = {}) {
+            const url = `${API_BASE}${endpoint}`;
+            const config = {
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                ...options,
+            };
+
+            const response = await fetch(url, config);
+            if (!response.ok) {
+                throw new Error(`API request failed: ${response.statusText}`);
+            }
+            return response.json();
+        }
+
+        async function loadCards() {
+            const response = await apiRequest('/cards');
+            cards = response.data || [];
+            // Backup to localStorage
+            localStorage.setItem('kanbanCards', JSON.stringify(cards));
+        }
+
+        async function saveCardToAPI(card, isUpdate = false) {
+            try {
+                if (isUpdate) {
+                    await apiRequest(`/cards/${card.id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(card),
+                    });
+                } else {
+                    await apiRequest('/cards', {
+                        method: 'POST',
+                        body: JSON.stringify(card),
+                    });
+                }
+                // Backup to localStorage
+                localStorage.setItem('kanbanCards', JSON.stringify(cards));
+                return true;
+            } catch (error) {
+                console.error('Failed to save to API:', error);
+                // Save locally if offline
+                localStorage.setItem('kanbanCards', JSON.stringify(cards));
+                return false;
+            }
+        }
+
+        async function deleteCardFromAPI(cardId) {
+            try {
+                await apiRequest(`/cards/${cardId}`, {
+                    method: 'DELETE',
+                });
+                // Update localStorage
+                localStorage.setItem('kanbanCards', JSON.stringify(cards));
+                return true;
+            } catch (error) {
+                console.error('Failed to delete from API:', error);
+                // Update localStorage
+                localStorage.setItem('kanbanCards', JSON.stringify(cards));
+                return false;
+            }
+        }
+
+        async function syncLocalChanges() {
+            // This would sync any local changes made while offline
+            // For now, we'll just reload from the server
+            try {
+                await loadCards();
+                renderCards();
+                updateStatus('online', 'synced ✨');
+            } catch (error) {
+                console.error('Sync failed:', error);
+            }
+        }
+
+        function setupDragAndDrop() {
+            const containers = ['unsorted-cards', 'todo-cards', 'progress-cards', 'done-cards'];
+            
+            containers.forEach(containerId => {
+                const container = document.getElementById(containerId);
+                Sortable.create(container, {
+                    group: 'kanban',
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    chosenClass: 'sortable-chosen',
+                    onEnd: function(evt) {
+                        const cardId = evt.item.getAttribute('data-card-id');
+                        const newStatus = evt.to.id.replace('-cards', '');
+                        updateCardStatus(cardId, newStatus);
+                    }
+                });
+            });
+        }
+
+        function setupLabelSelector() {
+            const labelOptions = document.querySelectorAll('.label-option');
+            labelOptions.forEach(option => {
+                option.addEventListener('click', function() {
+                    labelOptions.forEach(o => o.classList.remove('selected'));
+                    this.classList.add('selected');
+                });
+            });
+        }
+
+        function generateId() {
+            return Date.now().toString(36) + Math.random().toString(36).substr(2);
+        }
+
+        function openModal(cardId = null) {
+            const modal = document.getElementById('cardModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const form = document.getElementById('cardForm');
+            
+            editingCardId = cardId;
+            
+            if (cardId) {
+                const card = cards.find(c => c.id === cardId);
+                modalTitle.textContent = 'edit this thing';
+                document.getElementById('cardTitle').value = card.title;
+                document.getElementById('cardDescription').value = card.description;
+                document.getElementById('cardDueDate').value = card.dueDate;
+                document.getElementById('cardDueTime').value = card.dueTime || '';
+                
+                // Select the current label
+                document.querySelectorAll('.label-option').forEach(option => {
+                    option.classList.remove('selected');
+                    if (option.getAttribute('data-color') === card.label) {
+                        option.classList.add('selected');
+                    }
+                });
+            } else {
+                modalTitle.textContent = 'add something new';
+                form.reset();
+                document.querySelectorAll('.label-option').forEach(option => {
+                    option.classList.remove('selected');
+                });
+                document.querySelector('[data-color="gray"]').classList.add('selected');
+            }
+            
+            modal.style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('cardModal').style.display = 'none';
+            editingCardId = null;
+        }
+
+        async function saveCard(event) {
+            event.preventDefault();
+            
+            const title = document.getElementById('cardTitle').value.trim();
+            const description = document.getElementById('cardDescription').value.trim();
+            const dueDate = document.getElementById('cardDueDate').value;
+            const dueTime = document.getElementById('cardDueTime').value;
+            const selectedLabel = document.querySelector('.label-option.selected');
+            const label = selectedLabel ? selectedLabel.getAttribute('data-color') : 'gray';
+            
+            if (!title) return;
+            
+            if (editingCardId) {
+                // Update existing card
+                const cardIndex = cards.findIndex(c => c.id === editingCardId);
+                const updatedCard = {
+                    ...cards[cardIndex],
+                    title,
+                    description,
+                    dueDate,
+                    dueTime,
+                    label
+                };
+                cards[cardIndex] = updatedCard;
+                await saveCardToAPI(updatedCard, true);
+            } else {
+                // Create new card
+                const newCard = {
+                    id: generateId(),
+                    title,
+                    description,
+                    dueDate,
+                    dueTime,
+                    label,
+                    status: 'unsorted',
+                    createdAt: new Date().toISOString()
+                };
+                cards.push(newCard);
+                await saveCardToAPI(newCard, false);
+            }
+            
+            renderCards();
+            closeModal();
+        }
+
+        async function deleteCard(cardId) {
+            if (confirm('sure you want to delete this? (it\'ll be gone forever)')) {
+                cards = cards.filter(c => c.id !== cardId);
+                await deleteCardFromAPI(cardId);
+                renderCards();
+            }
+        }
+
+        async function updateCardStatus(cardId, newStatus) {
+            const card = cards.find(c => c.id === cardId);
+            if (card) {
+                card.status = newStatus;
+                await saveCardToAPI(card, true);
+            }
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            const today = new Date();
+            const diffTime = date - today;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays < 0) {
+                return `overdue by ${Math.abs(diffDays)} day${Math.abs(diffDays) !== 1 ? 's' : ''}`;
+            } else if (diffDays === 0) {
+                return 'due today';
+            } else if (diffDays === 1) {
+                return 'due tomorrow';
+            } else {
+                return `due in ${diffDays} days`;
+            }
+        }
+
+        function formatTime(timeString) {
+            if (!timeString) return '';
+            const [hours, minutes] = timeString.split(':');
+            const hour = parseInt(hours);
+            const ampm = hour >= 12 ? 'pm' : 'am';
+            const displayHour = hour % 12 || 12;
+            return `${displayHour}:${minutes} ${ampm}`;
+        }
+
+        function isOverdue(dateString, timeString) {
+            if (!dateString) return false;
+            
+            const now = new Date();
+            const dueDate = new Date(dateString);
+            
+            if (timeString) {
+                const [hours, minutes] = timeString.split(':');
+                dueDate.setHours(parseInt(hours), parseInt(minutes));
+            } else {
+                dueDate.setHours(23, 59, 59);
+            }
+            
+            return dueDate < now;
+        }
+
+        function renderCards() {
+            const containers = {
+                unsorted: document.getElementById('unsorted-cards'),
+                todo: document.getElementById('todo-cards'),
+                progress: document.getElementById('progress-cards'),
+                done: document.getElementById('done-cards')
+            };
+            
+            // Clear all containers
+            Object.values(containers).forEach(container => {
+                container.innerHTML = '';
+            });
+            
+            // Render cards in their respective containers
+            cards.forEach(card => {
+                const cardElement = document.createElement('div');
+                cardElement.className = 'card';
+                cardElement.setAttribute('data-card-id', card.id);
+                cardElement.style.borderLeftColor = getColorValue(card.label);
+                
+                const dueDateHtml = card.dueDate ? 
+                    `<div class="card-due-wrapper">
+                        <div class="card-due-date ${isOverdue(card.dueDate, card.dueTime) ? 'overdue' : ''}">
+                            ${formatDate(card.dueDate)}
+                        </div>
+                        ${card.dueTime ? `<div class="card-due-time">at ${formatTime(card.dueTime)}</div>` : ''}
+                    </div>` : '';
+                
+                cardElement.innerHTML = `
+                    <div class="card-title">
+                        <span class="label label-${card.label}"></span>
+                        ${card.title}
+                    </div>
+                    ${card.description ? `<div class="card-description">${card.description}</div>` : ''}
+                    <div class="card-meta">
+                        ${dueDateHtml}
+                        <div class="card-actions">
+                            <button class="card-btn edit-btn" onclick="openModal('${card.id}')" title="edit this">✏️</button>
+                            <button class="card-btn delete-btn" onclick="deleteCard('${card.id}')" title="delete forever">🗑️</button>
+                        </div>
+                    </div>
+                `;
+                
+                containers[card.status].appendChild(cardElement);
+            });
+        }
+
+        function getColorValue(color) {
+            const colors = {
+                red: '#c55043',
+                yellow: '#fdcb6e',
+                green: '#00b894',
+                blue: '#74b9ff',
+                purple: '#6c5ce7',
+                gray: '#718096'
+            };
+            return colors[color] || colors.gray;
+        }
+
+        // Event listeners
+        document.getElementById('cardForm').addEventListener('submit', saveCard);
+
+        // Close modal when clicking outside
+        document.getElementById('cardModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>
