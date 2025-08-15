@@ -16,29 +16,7 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E📋%3C/text%3E%3C/svg%3E">
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
-    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
-    <script>
-        // Add a fallback check for netlify identity widget loading
-        window.addEventListener('load', function() {
-            if (typeof netlifyIdentity === 'undefined') {
-                console.error('Netlify Identity widget failed to load');
-                // Show error message to user
-                setTimeout(() => {
-                    if (typeof netlifyIdentity === 'undefined') {
-                        document.body.innerHTML += `
-                            <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10000; display: flex; align-items: center; justify-content: center;">
-                                <div style="background: white; padding: 2rem; border-radius: 8px; text-align: center; max-width: 400px;">
-                                    <h2>Authentication Service Unavailable</h2>
-                                    <p>Unable to load authentication. Please check your internet connection and try refreshing the page.</p>
-                                    <button onclick="location.reload()" style="padding: 0.5rem 1rem; background: #c55043; color: white; border: none; border-radius: 4px; cursor: pointer;">Refresh Page</button>
-                                </div>
-                            </div>
-                        `;
-                    }
-                }, 3000);
-            }
-        });
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
             --color-primary: #c55043;
@@ -618,7 +596,7 @@
             <span>👋</span>
             <span id="userName"></span>
         </div>
-        <button class="auth-btn login" id="loginBtn" onclick="login(); console.log('Button onclick fired');">sign in</button>
+        <button class="auth-btn login" id="loginBtn" onclick="login()">sign in</button>
         <button class="auth-btn" id="logoutBtn" onclick="logout()" style="display: none;">sign out</button>
     </div>
 
@@ -629,11 +607,11 @@
     <div class="login-prompt" id="loginPrompt">
         <div class="login-content">
             <h2>hey there! 👋</h2>
-            <p>you'll need to sign in to save your kanban cards and sync across devices</p>
+            <p>sign in to save your kanban cards and sync across all your devices</p>
             <button class="btn btn-primary" onclick="login()">sign in to get started</button>
-            <br><br>
-            <button class="btn btn-secondary" onclick="testAuth()" style="font-size: 0.8rem;">debug: test auth widget</button>
-            <button class="btn btn-secondary" onclick="directOpen()" style="font-size: 0.8rem; margin-left: 10px;">debug: direct open</button>
+            <p style="font-size: 0.8rem; margin-top: 1rem; color: var(--color-text-muted);">
+                new here? we'll create an account for you automatically
+            </p>
         </div>
     </div>
 
@@ -726,193 +704,133 @@
         let deferredPrompt;
         let currentUser = null;
         let isAuthenticated = false;
-        let processingToken = false;
+        let supabase = null;
 
-        // API Configuration
-        const API_BASE = window.location.hostname === 'localhost' 
-            ? 'http://localhost:8888/.netlify/functions'
-            : '/.netlify/functions';
+        // Supabase Configuration - Replace with your project details
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // You'll get this from your Supabase dashboard
+        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // You'll get this from your Supabase dashboard
 
         // Initialize the board
         document.addEventListener('DOMContentLoaded', function() {
             console.log('DOM Content Loaded');
-            initializeAuth();
+            initializeSupabase();
             setupDragAndDrop();
             setupLabelSelector();
             setupPWA();
             updateOnlineStatus();
-            
-            // Setup button listeners after a brief delay to ensure DOM is ready
-            setTimeout(setupButtonListeners, 500);
         });
 
-        // Authentication functions
-        function initializeAuth() {
-            console.log('Initializing authentication...');
+        // Supabase Authentication functions
+        async function initializeSupabase() {
+            console.log('Initializing Supabase...');
             
-            // Check if netlifyIdentity is available
-            if (typeof netlifyIdentity === 'undefined') {
-                console.error('Netlify Identity widget not loaded');
-                showLoginError();
+            if (SUPABASE_URL === 'YOUR_SUPABASE_URL') {
+                console.error('Please configure your Supabase credentials');
+                showConfigError();
                 return;
             }
 
-            // Check for invite token in URL first
-            const urlParams = new URLSearchParams(window.location.hash.substring(1));
-            const inviteToken = urlParams.get('invite_token');
-            const recoveryToken = urlParams.get('recovery_token');
-            const confirmationToken = urlParams.get('confirmation_token');
-            
-            console.log('URL tokens:', { inviteToken, recoveryToken, confirmationToken });
+            try {
+                // Initialize Supabase client
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                console.log('Supabase client created');
 
-            // Initialize Netlify Identity with explicit configuration
-            netlifyIdentity.init({
-                APIUrl: window.location.origin + '/.netlify/identity'
-            });
-
-            // If there's an invite/recovery/confirmation token, don't show login prompt yet
-            if (inviteToken || recoveryToken || confirmationToken) {
-                console.log('Processing token, hiding login prompt');
-                processingToken = true;
-                hideLoginPrompt();
-                // Let Netlify Identity handle the token
-                return;
-            }
-
-            // Check if user is already logged in
-            currentUser = netlifyIdentity.currentUser();
-            console.log('Current user:', currentUser);
-            
-            if (currentUser) {
-                isAuthenticated = true;
-                updateAuthUI();
-                initializeApp();
-            } else {
-                isAuthenticated = false;
-                updateAuthUI();
-                showLoginPrompt();
-            }
-
-            // Listen for auth events
-            netlifyIdentity.on('init', user => {
-                console.log('Identity initialized, user:', user);
-                if (!user) {
+                // Check if user is already logged in
+                const { data: { session } } = await supabase.auth.getSession();
+                
+                if (session) {
+                    currentUser = session.user;
+                    isAuthenticated = true;
+                    console.log('User already logged in:', currentUser);
+                    updateAuthUI();
+                    await initializeApp();
+                } else {
+                    isAuthenticated = false;
+                    updateAuthUI();
                     showLoginPrompt();
                 }
-            });
 
-            netlifyIdentity.on('login', user => {
-                console.log('User logged in:', user);
-                currentUser = user;
-                isAuthenticated = true;
-                updateAuthUI();
-                hideLoginPrompt();
-                initializeApp();
-                netlifyIdentity.close();
-            });
-
-            netlifyIdentity.on('logout', () => {
-                console.log('User logged out');
-                currentUser = null;
-                isAuthenticated = false;
-                updateAuthUI();
-                showLoginPrompt();
-                cards = [];
-                renderCards();
-                // Clear all user data
-                Object.keys(localStorage).forEach(key => {
-                    if (key.startsWith('kanbanCards_')) {
-                        localStorage.removeItem(key);
-                    }
-                });
-            });
-
-            netlifyIdentity.on('error', err => {
-                console.error('Netlify Identity error:', err);
-            });
-
-            // Handle invite acceptance
-            netlifyIdentity.on('open', () => {
-                console.log('Identity modal opened');
-                hideLoginPrompt();
-            });
-
-            netlifyIdentity.on('close', () => {
-                console.log('Identity modal closed');
-                // Check if user is now logged in after modal closes
-                setTimeout(() => {
-                    currentUser = netlifyIdentity.currentUser();
-                    if (currentUser) {
-                        console.log('User logged in after modal close');
+                // Listen for auth changes
+                supabase.auth.onAuthStateChange((event, session) => {
+                    console.log('Auth state changed:', event, session);
+                    
+                    if (event === 'SIGNED_IN' && session) {
+                        currentUser = session.user;
                         isAuthenticated = true;
                         updateAuthUI();
                         hideLoginPrompt();
                         initializeApp();
-                    } else if (!processingToken) {
-                        // Only show login prompt if not processing a token
+                    } else if (event === 'SIGNED_OUT') {
+                        currentUser = null;
+                        isAuthenticated = false;
+                        updateAuthUI();
                         showLoginPrompt();
+                        cards = [];
+                        renderCards();
+                        // Clear user data
+                        Object.keys(localStorage).forEach(key => {
+                            if (key.startsWith('kanbanCards_')) {
+                                localStorage.removeItem(key);
+                            }
+                        });
                     }
-                    processingToken = false;
-                }, 100);
-            });
+                });
+
+            } catch (error) {
+                console.error('Supabase initialization error:', error);
+                showLoginError();
+            }
         }
 
-        function login() {
+        async function login() {
             console.log('=== LOGIN FUNCTION CALLED ===');
-            console.log('netlifyIdentity available:', typeof netlifyIdentity !== 'undefined');
-            console.log('netlifyIdentity object:', netlifyIdentity);
             
-            if (typeof netlifyIdentity === 'undefined') {
-                console.error('Netlify Identity not available');
-                alert('Authentication service not loaded. Please refresh the page.');
-                showLoginError();
+            if (!supabase) {
+                console.error('Supabase not initialized');
+                alert('Authentication service not available. Please refresh the page.');
                 return;
             }
-            
-            console.log('Attempting to open netlifyIdentity modal...');
+
             try {
-                netlifyIdentity.open();
-                console.log('netlifyIdentity.open() called successfully');
-            } catch (error) {
-                console.error('Error opening login modal:', error);
-                alert('Error opening login: ' + error.message);
-                showLoginError();
-            }
-        }
+                console.log('Starting email/password authentication...');
+                
+                // For now, show a simple prompt for email/password
+                // Later we can add a proper modal
+                const email = prompt('Enter your email:');
+                if (!email) return;
+                
+                const password = prompt('Enter your password (or create new account):');
+                if (!password) return;
 
-        // Add a direct button event listener as backup
-        function setupButtonListeners() {
-            console.log('Setting up button listeners...');
-            
-            const loginBtn = document.getElementById('loginBtn');
-            const loginBtnInPrompt = document.querySelector('.login-prompt .btn-primary');
-            
-            if (loginBtn) {
-                console.log('Login button found, adding listeners');
-                // Remove existing listeners and add new ones
-                loginBtn.onclick = null;
-                loginBtn.addEventListener('click', function(e) {
-                    console.log('Login button clicked via event listener');
-                    e.preventDefault();
-                    login();
+                // Try to sign in first
+                let { data, error } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: password
                 });
-                // Also keep the onclick for backup
-                loginBtn.onclick = function(e) {
-                    console.log('Login button clicked via onclick');
-                    e.preventDefault();
-                    login();
-                };
-            } else {
-                console.error('Login button not found');
-            }
 
-            if (loginBtnInPrompt) {
-                console.log('Login prompt button found, adding listeners');
-                loginBtnInPrompt.onclick = function(e) {
-                    console.log('Prompt login button clicked');
-                    e.preventDefault();
-                    login();
-                };
+                if (error && error.message.includes('Invalid login credentials')) {
+                    // If sign in fails, try to sign up
+                    console.log('Sign in failed, trying sign up...');
+                    ({ data, error } = await supabase.auth.signUp({
+                        email: email,
+                        password: password
+                    }));
+                    
+                    if (!error) {
+                        alert('Account created! Please check your email for verification.');
+                    }
+                }
+
+                if (error) {
+                    console.error('Authentication error:', error);
+                    alert('Authentication failed: ' + error.message);
+                } else {
+                    console.log('Authentication successful:', data);
+                }
+
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('Login failed: ' + error.message);
             }
         }
 
@@ -927,38 +845,27 @@
             }
         }
 
-        // Debug functions
-        function testAuth() {
-            console.log('=== AUTH DEBUG TEST ===');
-            console.log('window.netlifyIdentity:', window.netlifyIdentity);
-            console.log('typeof netlifyIdentity:', typeof netlifyIdentity);
-            
-            if (typeof netlifyIdentity !== 'undefined') {
-                console.log('netlifyIdentity methods:', Object.getOwnPropertyNames(netlifyIdentity));
-                alert('Netlify Identity is loaded! Check console for details.');
-            } else {
-                alert('Netlify Identity is NOT loaded!');
-            }
-        }
 
-        function directOpen() {
-            console.log('=== DIRECT OPEN TEST ===');
-            try {
-                if (window.netlifyIdentity) {
-                    window.netlifyIdentity.open();
-                    console.log('Direct open successful');
-                } else {
-                    alert('window.netlifyIdentity not available');
-                }
-            } catch (e) {
-                console.error('Direct open failed:', e);
-                alert('Direct open failed: ' + e.message);
-            }
-        }
-
-        function logout() {
+        async function logout() {
             if (confirm('sure you want to sign out? your local changes will be lost.')) {
-                netlifyIdentity.logout();
+                try {
+                    await supabase.auth.signOut();
+                    console.log('Signed out successfully');
+                } catch (error) {
+                    console.error('Logout error:', error);
+                    alert('Error signing out: ' + error.message);
+                }
+            }
+        }
+
+        function showConfigError() {
+            const loginContent = document.querySelector('.login-content');
+            if (loginContent) {
+                loginContent.innerHTML = `
+                    <h2>configuration needed 🔧</h2>
+                    <p>please configure your supabase credentials in the code and redeploy.</p>
+                    <button class="btn btn-secondary" onclick="location.reload()">refresh page</button>
+                `;
             }
         }
 
@@ -1077,39 +984,33 @@
             statusText.textContent = text;
         }
 
-        async function apiRequest(endpoint, options = {}) {
-            if (!isAuthenticated) {
-                throw new Error('User not authenticated');
-            }
-
-            const url = `${API_BASE}${endpoint}`;
-            const authToken = getAuthToken();
-            
-            const config = {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authToken}`,
-                },
-                ...options,
-            };
-
-            const response = await fetch(url, config);
-            if (response.status === 401) {
-                // Token expired or invalid
-                logout();
-                throw new Error('Authentication expired');
-            }
-            if (!response.ok) {
-                throw new Error(`API request failed: ${response.statusText}`);
-            }
-            return response.json();
-        }
 
         async function loadCards() {
-            const response = await apiRequest('/cards');
-            cards = response.data || [];
-            // Backup to localStorage with user context
-            saveToLocalStorage();
+            if (!supabase || !isAuthenticated) {
+                throw new Error('Not authenticated');
+            }
+
+            try {
+                const { data, error } = await supabase
+                    .from('cards')
+                    .select('*')
+                    .eq('user_id', currentUser.id)
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+
+                cards = data || [];
+                saveToLocalStorage();
+                console.log('Loaded cards from Supabase:', cards);
+            } catch (error) {
+                console.error('Error loading cards:', error);
+                // Try to load from localStorage as fallback
+                const localCards = loadFromLocalStorage();
+                if (localCards.length > 0) {
+                    cards = localCards;
+                }
+                throw error;
+            }
         }
 
         function saveToLocalStorage() {
@@ -1134,49 +1035,71 @@
             return [];
         }
 
-        async function saveCardToAPI(card, isUpdate = false) {
+        async function saveCardToSupabase(card, isUpdate = false) {
+            if (!supabase || !isAuthenticated) {
+                throw new Error('Not authenticated');
+            }
+
             try {
+                // Ensure user_id is set
+                card.user_id = currentUser.id;
+                
                 if (isUpdate) {
-                    await apiRequest(`/cards/${card.id}`, {
-                        method: 'PUT',
-                        body: JSON.stringify(card),
-                    });
+                    const { data, error } = await supabase
+                        .from('cards')
+                        .update(card)
+                        .eq('id', card.id)
+                        .eq('user_id', currentUser.id)
+                        .select();
+                    
+                    if (error) throw error;
+                    console.log('Updated card:', data);
                 } else {
-                    await apiRequest('/cards', {
-                        method: 'POST',
-                        body: JSON.stringify(card),
-                    });
+                    const { data, error } = await supabase
+                        .from('cards')
+                        .insert([card])
+                        .select();
+                    
+                    if (error) throw error;
+                    console.log('Created card:', data);
                 }
-                // Backup to localStorage
+
                 saveToLocalStorage();
                 return true;
             } catch (error) {
-                console.error('Failed to save to API:', error);
+                console.error('Failed to save to Supabase:', error);
                 // Save locally if offline
                 saveToLocalStorage();
                 return false;
             }
         }
 
-        async function deleteCardFromAPI(cardId) {
+        async function deleteCardFromSupabase(cardId) {
+            if (!supabase || !isAuthenticated) {
+                throw new Error('Not authenticated');
+            }
+
             try {
-                await apiRequest(`/cards/${cardId}`, {
-                    method: 'DELETE',
-                });
-                // Update localStorage
+                const { error } = await supabase
+                    .from('cards')
+                    .delete()
+                    .eq('id', cardId)
+                    .eq('user_id', currentUser.id);
+
+                if (error) throw error;
+
                 saveToLocalStorage();
+                console.log('Deleted card:', cardId);
                 return true;
             } catch (error) {
-                console.error('Failed to delete from API:', error);
-                // Update localStorage
+                console.error('Failed to delete from Supabase:', error);
                 saveToLocalStorage();
                 return false;
             }
         }
 
         async function syncLocalChanges() {
-            // This would sync any local changes made while offline
-            // For now, we'll just reload from the server
+            // Reload from Supabase
             try {
                 await loadCards();
                 renderCards();
@@ -1282,7 +1205,7 @@
                     label
                 };
                 cards[cardIndex] = updatedCard;
-                await saveCardToAPI(updatedCard, true);
+                await saveCardToSupabase(updatedCard, true);
             } else {
                 // Create new card
                 const newCard = {
@@ -1296,7 +1219,7 @@
                     createdAt: new Date().toISOString()
                 };
                 cards.push(newCard);
-                await saveCardToAPI(newCard, false);
+                await saveCardToSupabase(newCard, false);
             }
             
             renderCards();
@@ -1306,7 +1229,7 @@
         async function deleteCard(cardId) {
             if (confirm('sure you want to delete this? (it\'ll be gone forever)')) {
                 cards = cards.filter(c => c.id !== cardId);
-                await deleteCardFromAPI(cardId);
+                await deleteCardFromSupabase(cardId);
                 renderCards();
             }
         }
@@ -1315,7 +1238,7 @@
             const card = cards.find(c => c.id === cardId);
             if (card) {
                 card.status = newStatus;
-                await saveCardToAPI(card, true);
+                await saveCardToSupabase(card, true);
             }
         }
 
