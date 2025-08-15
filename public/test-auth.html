@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Auth Test</title>
+    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+</head>
+<body>
+    <h1>Simple Auth Test</h1>
+    <button onclick="openAuth()">Open Auth</button>
+    <button onclick="checkStatus()">Check Status</button>
+    
+    <script>
+        function openAuth() {
+            console.log('Opening auth...');
+            if (typeof netlifyIdentity !== 'undefined') {
+                netlifyIdentity.open();
+                console.log('Auth opened');
+            } else {
+                console.log('netlifyIdentity not available');
+            }
+        }
+        
+        function checkStatus() {
+            console.log('netlifyIdentity:', netlifyIdentity);
+            console.log('Current user:', netlifyIdentity.currentUser());
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof netlifyIdentity !== 'undefined') {
+                netlifyIdentity.init();
+                console.log('Identity initialized');
+            }
+        });
+    </script>
+</body>
+</html>
