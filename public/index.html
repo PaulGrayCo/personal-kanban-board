@@ -17,6 +17,28 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+    <script>
+        // Add a fallback check for netlify identity widget loading
+        window.addEventListener('load', function() {
+            if (typeof netlifyIdentity === 'undefined') {
+                console.error('Netlify Identity widget failed to load');
+                // Show error message to user
+                setTimeout(() => {
+                    if (typeof netlifyIdentity === 'undefined') {
+                        document.body.innerHTML += `
+                            <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10000; display: flex; align-items: center; justify-content: center;">
+                                <div style="background: white; padding: 2rem; border-radius: 8px; text-align: center; max-width: 400px;">
+                                    <h2>Authentication Service Unavailable</h2>
+                                    <p>Unable to load authentication. Please check your internet connection and try refreshing the page.</p>
+                                    <button onclick="location.reload()" style="padding: 0.5rem 1rem; background: #c55043; color: white; border: none; border-radius: 4px; cursor: pointer;">Refresh Page</button>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }, 3000);
+            }
+        });
+    </script>
     <style>
         :root {
             --color-primary: #c55043;
@@ -718,27 +740,44 @@
 
         // Authentication functions
         function initializeAuth() {
-            // Initialize Netlify Identity
-            netlifyIdentity.init();
+            console.log('Initializing authentication...');
+            
+            // Check if netlifyIdentity is available
+            if (typeof netlifyIdentity === 'undefined') {
+                console.error('Netlify Identity widget not loaded');
+                showLoginError();
+                return;
+            }
+
+            // Initialize Netlify Identity with explicit configuration
+            netlifyIdentity.init({
+                APIUrl: window.location.origin + '/.netlify/identity'
+            });
 
             // Check if user is already logged in
             currentUser = netlifyIdentity.currentUser();
+            console.log('Current user:', currentUser);
+            
             if (currentUser) {
                 isAuthenticated = true;
                 updateAuthUI();
                 initializeApp();
             } else {
+                isAuthenticated = false;
+                updateAuthUI();
                 showLoginPrompt();
             }
 
             // Listen for auth events
             netlifyIdentity.on('init', user => {
+                console.log('Identity initialized, user:', user);
                 if (!user) {
                     showLoginPrompt();
                 }
             });
 
             netlifyIdentity.on('login', user => {
+                console.log('User logged in:', user);
                 currentUser = user;
                 isAuthenticated = true;
                 updateAuthUI();
@@ -748,18 +787,51 @@
             });
 
             netlifyIdentity.on('logout', () => {
+                console.log('User logged out');
                 currentUser = null;
                 isAuthenticated = false;
                 updateAuthUI();
                 showLoginPrompt();
                 cards = [];
                 renderCards();
-                localStorage.removeItem('kanbanCards');
+                // Clear all user data
+                Object.keys(localStorage).forEach(key => {
+                    if (key.startsWith('kanbanCards_')) {
+                        localStorage.removeItem(key);
+                    }
+                });
+            });
+
+            netlifyIdentity.on('error', err => {
+                console.error('Netlify Identity error:', err);
             });
         }
 
         function login() {
-            netlifyIdentity.open();
+            console.log('Login button clicked');
+            if (typeof netlifyIdentity === 'undefined') {
+                console.error('Netlify Identity not available');
+                showLoginError();
+                return;
+            }
+            
+            try {
+                netlifyIdentity.open();
+            } catch (error) {
+                console.error('Error opening login modal:', error);
+                showLoginError();
+            }
+        }
+
+        function showLoginError() {
+            const loginContent = document.querySelector('.login-content');
+            if (loginContent) {
+                loginContent.innerHTML = `
+                    <h2>oops! 😅</h2>
+                    <p>authentication is having trouble loading. try refreshing the page or check your internet connection.</p>
+                    <button class="btn btn-secondary" onclick="location.reload()">refresh page</button>
+                `;
+            }
         }
 
         function logout() {
