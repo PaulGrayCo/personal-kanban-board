@@ -706,9 +706,9 @@
         let isAuthenticated = false;
         let supabase = null;
 
-        // Supabase Configuration - Replace with your project details
-        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // You'll get this from your Supabase dashboard
-        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // You'll get this from your Supabase dashboard
+        // Supabase Configuration
+        const SUPABASE_URL = 'https://yzevqdclcyfrpxwizbxb.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6ZXZxZGNsY3lmcnB4d2l6YnhiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUyMjY5MDAsImV4cCI6MjA3MDgwMjkwMH0.O5E60zzKTC4sab_6tK79yTzYWU82P0h0e2V2Z2c93yU';
 
         // Initialize the board
         document.addEventListener('DOMContentLoaded', function() {
@@ -1154,8 +1154,8 @@
                 modalTitle.textContent = 'edit this thing';
                 document.getElementById('cardTitle').value = card.title;
                 document.getElementById('cardDescription').value = card.description;
-                document.getElementById('cardDueDate').value = card.dueDate;
-                document.getElementById('cardDueTime').value = card.dueTime || '';
+                document.getElementById('cardDueDate').value = card.due_date || card.dueDate;
+                document.getElementById('cardDueTime').value = card.due_time || card.dueTime || '';
                 
                 // Select the current label
                 document.querySelectorAll('.label-option').forEach(option => {
@@ -1200,8 +1200,8 @@
                     ...cards[cardIndex],
                     title,
                     description,
-                    dueDate,
-                    dueTime,
+                    due_date: dueDate,
+                    due_time: dueTime,
                     label
                 };
                 cards[cardIndex] = updatedCard;
@@ -1212,11 +1212,11 @@
                     id: generateId(),
                     title,
                     description,
-                    dueDate,
-                    dueTime,
+                    due_date: dueDate,
+                    due_time: dueTime,
                     label,
                     status: 'unsorted',
-                    createdAt: new Date().toISOString()
+                    created_at: new Date().toISOString()
                 };
                 cards.push(newCard);
                 await saveCardToSupabase(newCard, false);
@@ -1305,12 +1305,14 @@
                 cardElement.setAttribute('data-card-id', card.id);
                 cardElement.style.borderLeftColor = getColorValue(card.label);
                 
-                const dueDateHtml = card.dueDate ? 
+                const dueDate = card.due_date || card.dueDate;
+                const dueTime = card.due_time || card.dueTime;
+                const dueDateHtml = dueDate ? 
                     `<div class="card-due-wrapper">
-                        <div class="card-due-date ${isOverdue(card.dueDate, card.dueTime) ? 'overdue' : ''}">
-                            ${formatDate(card.dueDate)}
+                        <div class="card-due-date ${isOverdue(dueDate, dueTime) ? 'overdue' : ''}">
+                            ${formatDate(dueDate)}
                         </div>
-                        ${card.dueTime ? `<div class="card-due-time">at ${formatTime(card.dueTime)}</div>` : ''}
+                        ${dueTime ? `<div class="card-due-time">at ${formatTime(dueTime)}</div>` : ''}
                     </div>` : '';
                 
                 cardElement.innerHTML = `
