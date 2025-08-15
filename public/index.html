@@ -16,6 +16,7 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E📋%3C/text%3E%3C/svg%3E">
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
     <style>
         :root {
             --color-primary: #c55043;
@@ -481,6 +482,98 @@
             font-size: 0.8rem;
         }
 
+        .auth-section {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            gap: var(--space-sm);
+            z-index: 1000;
+        }
+
+        .auth-btn {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            color: var(--color-text-primary);
+            padding: var(--space-xs) var(--space-sm);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 500;
+            transition: all var(--transition-fast);
+            text-transform: lowercase;
+        }
+
+        .auth-btn:hover {
+            background: rgba(255, 255, 255, 0.8);
+            transform: translateY(-1px);
+        }
+
+        .auth-btn.login {
+            background: linear-gradient(135deg, var(--color-primary), var(--color-electric));
+            color: white;
+            border: none;
+        }
+
+        .auth-btn.login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(197, 80, 67, 0.3);
+        }
+
+        .user-info {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            padding: var(--space-xs) var(--space-sm);
+            border-radius: var(--radius-sm);
+            font-size: 0.8rem;
+            color: var(--color-text-secondary);
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+        }
+
+        .login-prompt {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(45, 55, 72, 0.9);
+            z-index: 2000;
+            backdrop-filter: blur(16px);
+        }
+
+        .login-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            padding: var(--space-3xl);
+            border-radius: var(--radius-lg);
+            text-align: center;
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .login-content h2 {
+            margin-bottom: var(--space-lg);
+            color: var(--color-text-primary);
+            font-weight: 600;
+            text-transform: lowercase;
+        }
+
+        .login-content p {
+            margin-bottom: var(--space-xl);
+            color: var(--color-text-secondary);
+            font-family: var(--font-family-secondary);
+            font-style: italic;
+        }
+
         @media (max-width: 1024px) {
             .board {
                 grid-template-columns: repeat(2, 1fr);
@@ -498,8 +591,25 @@
     </style>
 </head>
 <body>
+    <div class="auth-section" id="authSection">
+        <div class="user-info" id="userInfo" style="display: none;">
+            <span>👋</span>
+            <span id="userName"></span>
+        </div>
+        <button class="auth-btn login" id="loginBtn" onclick="login()">sign in</button>
+        <button class="auth-btn" id="logoutBtn" onclick="logout()" style="display: none;">sign out</button>
+    </div>
+
     <div class="status-indicator" id="statusIndicator">
         <span id="statusText">connecting...</span>
+    </div>
+
+    <div class="login-prompt" id="loginPrompt">
+        <div class="login-content">
+            <h2>hey there! 👋</h2>
+            <p>you'll need to sign in to save your kanban cards and sync across devices</p>
+            <button class="btn btn-primary" onclick="login()">sign in to get started</button>
+        </div>
     </div>
 
     <div class="container">
@@ -589,6 +699,8 @@
         let editingCardId = null;
         let isOnline = navigator.onLine;
         let deferredPrompt;
+        let currentUser = null;
+        let isAuthenticated = false;
 
         // API Configuration
         const API_BASE = window.location.hostname === 'localhost' 
@@ -597,14 +709,101 @@
 
         // Initialize the board
         document.addEventListener('DOMContentLoaded', function() {
-            initializeApp();
+            initializeAuth();
             setupDragAndDrop();
             setupLabelSelector();
             setupPWA();
             updateOnlineStatus();
         });
 
+        // Authentication functions
+        function initializeAuth() {
+            // Initialize Netlify Identity
+            netlifyIdentity.init();
+
+            // Check if user is already logged in
+            currentUser = netlifyIdentity.currentUser();
+            if (currentUser) {
+                isAuthenticated = true;
+                updateAuthUI();
+                initializeApp();
+            } else {
+                showLoginPrompt();
+            }
+
+            // Listen for auth events
+            netlifyIdentity.on('init', user => {
+                if (!user) {
+                    showLoginPrompt();
+                }
+            });
+
+            netlifyIdentity.on('login', user => {
+                currentUser = user;
+                isAuthenticated = true;
+                updateAuthUI();
+                hideLoginPrompt();
+                initializeApp();
+                netlifyIdentity.close();
+            });
+
+            netlifyIdentity.on('logout', () => {
+                currentUser = null;
+                isAuthenticated = false;
+                updateAuthUI();
+                showLoginPrompt();
+                cards = [];
+                renderCards();
+                localStorage.removeItem('kanbanCards');
+            });
+        }
+
+        function login() {
+            netlifyIdentity.open();
+        }
+
+        function logout() {
+            if (confirm('sure you want to sign out? your local changes will be lost.')) {
+                netlifyIdentity.logout();
+            }
+        }
+
+        function updateAuthUI() {
+            const loginBtn = document.getElementById('loginBtn');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const userInfo = document.getElementById('userInfo');
+            const userName = document.getElementById('userName');
+
+            if (isAuthenticated && currentUser) {
+                loginBtn.style.display = 'none';
+                logoutBtn.style.display = 'block';
+                userInfo.style.display = 'flex';
+                userName.textContent = currentUser.user_metadata?.full_name || currentUser.email;
+            } else {
+                loginBtn.style.display = 'block';
+                logoutBtn.style.display = 'none';
+                userInfo.style.display = 'none';
+            }
+        }
+
+        function showLoginPrompt() {
+            document.getElementById('loginPrompt').style.display = 'block';
+        }
+
+        function hideLoginPrompt() {
+            document.getElementById('loginPrompt').style.display = 'none';
+        }
+
+        function getAuthToken() {
+            return currentUser ? currentUser.token.access_token : null;
+        }
+
         async function initializeApp() {
+            if (!isAuthenticated) {
+                showLoginPrompt();
+                return;
+            }
+
             try {
                 await loadCards();
                 renderCards();
@@ -612,9 +811,9 @@
             } catch (error) {
                 console.error('Failed to load cards:', error);
                 // Try to load from localStorage as fallback
-                const localCards = localStorage.getItem('kanbanCards');
-                if (localCards) {
-                    cards = JSON.parse(localCards);
+                const localCards = loadFromLocalStorage();
+                if (localCards.length > 0) {
+                    cards = localCards;
                     renderCards();
                     updateStatus('offline', 'offline mode');
                 } else {
@@ -685,15 +884,27 @@
         }
 
         async function apiRequest(endpoint, options = {}) {
+            if (!isAuthenticated) {
+                throw new Error('User not authenticated');
+            }
+
             const url = `${API_BASE}${endpoint}`;
+            const authToken = getAuthToken();
+            
             const config = {
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`,
                 },
                 ...options,
             };
 
             const response = await fetch(url, config);
+            if (response.status === 401) {
+                // Token expired or invalid
+                logout();
+                throw new Error('Authentication expired');
+            }
             if (!response.ok) {
                 throw new Error(`API request failed: ${response.statusText}`);
             }
@@ -703,8 +914,30 @@
         async function loadCards() {
             const response = await apiRequest('/cards');
             cards = response.data || [];
-            // Backup to localStorage
-            localStorage.setItem('kanbanCards', JSON.stringify(cards));
+            // Backup to localStorage with user context
+            saveToLocalStorage();
+        }
+
+        function saveToLocalStorage() {
+            if (currentUser) {
+                const userData = {
+                    userId: currentUser.id,
+                    cards: cards,
+                    lastSync: new Date().toISOString()
+                };
+                localStorage.setItem(`kanbanCards_${currentUser.id}`, JSON.stringify(userData));
+            }
+        }
+
+        function loadFromLocalStorage() {
+            if (currentUser) {
+                const stored = localStorage.getItem(`kanbanCards_${currentUser.id}`);
+                if (stored) {
+                    const userData = JSON.parse(stored);
+                    return userData.cards || [];
+                }
+            }
+            return [];
         }
 
         async function saveCardToAPI(card, isUpdate = false) {
@@ -721,12 +954,12 @@
                     });
                 }
                 // Backup to localStorage
-                localStorage.setItem('kanbanCards', JSON.stringify(cards));
+                saveToLocalStorage();
                 return true;
             } catch (error) {
                 console.error('Failed to save to API:', error);
                 // Save locally if offline
-                localStorage.setItem('kanbanCards', JSON.stringify(cards));
+                saveToLocalStorage();
                 return false;
             }
         }
@@ -737,12 +970,12 @@
                     method: 'DELETE',
                 });
                 // Update localStorage
-                localStorage.setItem('kanbanCards', JSON.stringify(cards));
+                saveToLocalStorage();
                 return true;
             } catch (error) {
                 console.error('Failed to delete from API:', error);
                 // Update localStorage
-                localStorage.setItem('kanbanCards', JSON.stringify(cards));
+                saveToLocalStorage();
                 return false;
             }
         }
