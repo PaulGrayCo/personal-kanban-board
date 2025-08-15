@@ -618,7 +618,7 @@
             <span>👋</span>
             <span id="userName"></span>
         </div>
-        <button class="auth-btn login" id="loginBtn" onclick="login()">sign in</button>
+        <button class="auth-btn login" id="loginBtn" onclick="login(); console.log('Button onclick fired');">sign in</button>
         <button class="auth-btn" id="logoutBtn" onclick="logout()" style="display: none;">sign out</button>
     </div>
 
@@ -631,6 +631,9 @@
             <h2>hey there! 👋</h2>
             <p>you'll need to sign in to save your kanban cards and sync across devices</p>
             <button class="btn btn-primary" onclick="login()">sign in to get started</button>
+            <br><br>
+            <button class="btn btn-secondary" onclick="testAuth()" style="font-size: 0.8rem;">debug: test auth widget</button>
+            <button class="btn btn-secondary" onclick="directOpen()" style="font-size: 0.8rem; margin-left: 10px;">debug: direct open</button>
         </div>
     </div>
 
@@ -732,11 +735,15 @@
 
         // Initialize the board
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM Content Loaded');
             initializeAuth();
             setupDragAndDrop();
             setupLabelSelector();
             setupPWA();
             updateOnlineStatus();
+            
+            // Setup button listeners after a brief delay to ensure DOM is ready
+            setTimeout(setupButtonListeners, 500);
         });
 
         // Authentication functions
@@ -851,18 +858,61 @@
         }
 
         function login() {
-            console.log('Login button clicked');
+            console.log('=== LOGIN FUNCTION CALLED ===');
+            console.log('netlifyIdentity available:', typeof netlifyIdentity !== 'undefined');
+            console.log('netlifyIdentity object:', netlifyIdentity);
+            
             if (typeof netlifyIdentity === 'undefined') {
                 console.error('Netlify Identity not available');
+                alert('Authentication service not loaded. Please refresh the page.');
                 showLoginError();
                 return;
             }
             
+            console.log('Attempting to open netlifyIdentity modal...');
             try {
                 netlifyIdentity.open();
+                console.log('netlifyIdentity.open() called successfully');
             } catch (error) {
                 console.error('Error opening login modal:', error);
+                alert('Error opening login: ' + error.message);
                 showLoginError();
+            }
+        }
+
+        // Add a direct button event listener as backup
+        function setupButtonListeners() {
+            console.log('Setting up button listeners...');
+            
+            const loginBtn = document.getElementById('loginBtn');
+            const loginBtnInPrompt = document.querySelector('.login-prompt .btn-primary');
+            
+            if (loginBtn) {
+                console.log('Login button found, adding listeners');
+                // Remove existing listeners and add new ones
+                loginBtn.onclick = null;
+                loginBtn.addEventListener('click', function(e) {
+                    console.log('Login button clicked via event listener');
+                    e.preventDefault();
+                    login();
+                });
+                // Also keep the onclick for backup
+                loginBtn.onclick = function(e) {
+                    console.log('Login button clicked via onclick');
+                    e.preventDefault();
+                    login();
+                };
+            } else {
+                console.error('Login button not found');
+            }
+
+            if (loginBtnInPrompt) {
+                console.log('Login prompt button found, adding listeners');
+                loginBtnInPrompt.onclick = function(e) {
+                    console.log('Prompt login button clicked');
+                    e.preventDefault();
+                    login();
+                };
             }
         }
 
@@ -874,6 +924,35 @@
                     <p>authentication is having trouble loading. try refreshing the page or check your internet connection.</p>
                     <button class="btn btn-secondary" onclick="location.reload()">refresh page</button>
                 `;
+            }
+        }
+
+        // Debug functions
+        function testAuth() {
+            console.log('=== AUTH DEBUG TEST ===');
+            console.log('window.netlifyIdentity:', window.netlifyIdentity);
+            console.log('typeof netlifyIdentity:', typeof netlifyIdentity);
+            
+            if (typeof netlifyIdentity !== 'undefined') {
+                console.log('netlifyIdentity methods:', Object.getOwnPropertyNames(netlifyIdentity));
+                alert('Netlify Identity is loaded! Check console for details.');
+            } else {
+                alert('Netlify Identity is NOT loaded!');
+            }
+        }
+
+        function directOpen() {
+            console.log('=== DIRECT OPEN TEST ===');
+            try {
+                if (window.netlifyIdentity) {
+                    window.netlifyIdentity.open();
+                    console.log('Direct open successful');
+                } else {
+                    alert('window.netlifyIdentity not available');
+                }
+            } catch (e) {
+                console.error('Direct open failed:', e);
+                alert('Direct open failed: ' + e.message);
             }
         }
 
